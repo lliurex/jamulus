@@ -1,6 +1,6 @@
-jamulus (5.7git) bionic; urgency=medium
+jamulus (5.7git-lliurex1) bionic; urgency=medium
 
 
-  * Initial release. 
+  * Initial release for 19.04. 
 
  -- Juanma Navarro Mañez <juanma1980@gmail.com>  Mon, 15 Jun 2020 16:23:28 +0200
