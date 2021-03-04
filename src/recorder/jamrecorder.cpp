@@ -45,7 +45,8 @@ CJamClient::CJamClient(const qint64 frame, const int _numChannels, const QString
     startFrame (frame),
     numChannels (static_cast<uint16_t>(_numChannels)),
     name (name),
-    address (address)
+    address (address),
+    out (nullptr)
 {
     // At this point we may not have much of a name
     QString fileName = ClientName() + "-" + QString::number(frame) + "-" + QString::number(_numChannels);
@@ -88,8 +89,12 @@ void CJamClient::Frame(const QString _name, const CVector<int16_t>& pcm, int iSe
  */
 void CJamClient::Disconnect()
 {
-    static_cast<CWaveStream*>(out)->finalise();
-    out = nullptr;
+    if (out)
+    {
+        static_cast<CWaveStream*>(out)->finalise();
+        delete out;
+        out = nullptr;
+    }
 
     wavFile->close();
 
@@ -135,6 +140,22 @@ CJamSession::CJamSession(QDir recordBaseDir) :
 }
 
 /**
+ * @brief CJamSession::~CJamSession
+ */
+CJamSession::~CJamSession()
+{
+    // free up any active jamClientConnections
+    for (int i = 0; i < jamClientConnections.count(); i++ )
+    {
+        if ( jamClientConnections[i] )
+        {
+            delete jamClientConnections[i];
+            jamClientConnections[i] = nullptr;
+        }
+    }
+}
+
+/**
  * @brief CJamSession::DisconnectClient Capture details of the departing client's connection
  * @param iChID the channel id of the client that disconnected
  */
@@ -154,7 +175,7 @@ void CJamSession::DisconnectClient(int iChID)
 }
 
 /**
- * @brief CJamSession::Frame Process a frame emited for a client by the server
+ * @brief CJamSession::Frame Process a frame emitted for a client by the server
  * @param iChID the client channel id
  * @param name the client name
  * @param address the client IP and port number
@@ -301,61 +322,35 @@ QMap<QString, QList<STrackItem>> CJamSession::TracksFromSessionDir(const QString
 
 /**
  * @brief CJamRecorder::Init Create recording directory, if necessary, and connect signal handlers
- * @param server Server object emiting signals
+ * @param server Server object emitting signals
+ * @return QString::null on success else the failure reason
  */
-bool CJamRecorder::Init( const CServer* server,
-                         const int      _iServerFrameSizeSamples )
+QString CJamRecorder::Init()
 {
-    QFileInfo fi(recordBaseDir.absolutePath());
-    fi.setCaching(false);
+    QString errmsg = QString::null;
+    QFileInfo fi ( recordBaseDir.absolutePath() );
+    fi.setCaching ( false );
 
-    if (!fi.exists() && !QDir().mkpath(recordBaseDir.absolutePath()))
+    if ( !fi.exists() && !QDir().mkpath ( recordBaseDir.absolutePath() ) )
     {
-        qCritical() << recordBaseDir.absolutePath() << "does not exist but could not be created";
-        return false;
+        errmsg = QString( "'%1' does not exist but could not be created." ).arg( recordBaseDir.absolutePath() );
+        qCritical() << qUtf8Printable( errmsg );
+        return errmsg;
     }
     if (!fi.isDir())
     {
-        qCritical() << recordBaseDir.absolutePath() << "exists but is not a directory";
-        return false;
+        errmsg = QString( "'%1' exists but is not a directory" ).arg( recordBaseDir.absolutePath() );
+        qCritical() << qUtf8Printable( errmsg );
+        return errmsg;
     }
     if (!fi.isWritable())
     {
-        qCritical() << recordBaseDir.absolutePath() << "is a directory but cannot be written to";
-        return false;
+        errmsg = QString( "'%1' is a directory but cannot be written to" ).arg( recordBaseDir.absolutePath() );
+        qCritical() << qUtf8Printable( errmsg );
+        return errmsg;
     }
 
-    QObject::connect( (const QObject *)server, SIGNAL ( RestartRecorder() ),
-                      this, SLOT( OnTriggerSession() ),
-                      Qt::ConnectionType::QueuedConnection );
-
-    QObject::connect( (const QObject *)server, SIGNAL ( StopRecorder() ),
-                      this, SLOT( OnEnd() ),
-                      Qt::ConnectionType::QueuedConnection );
-
-    QObject::connect( (const QObject *)server, SIGNAL ( Stopped() ),
-                      this, SLOT( OnEnd() ),
-                      Qt::ConnectionType::QueuedConnection );
-
-    QObject::connect( (const QObject *)server, SIGNAL ( ClientDisconnected ( int ) ),
-                      this, SLOT( OnDisconnected ( int ) ),
-                      Qt::ConnectionType::QueuedConnection );
-
-    qRegisterMetaType<CVector<int16_t>> ( "CVector<int16_t>" );
-    QObject::connect( (const QObject *)server, SIGNAL ( AudioFrame( const int, const QString, const CHostAddress, const int, const CVector<int16_t> ) ),
-                      this, SLOT(  OnFrame (const int, const QString, const CHostAddress, const int, const CVector<int16_t> ) ),
-                      Qt::ConnectionType::QueuedConnection );
-
-    QObject::connect( QCoreApplication::instance(), SIGNAL ( aboutToQuit() ),
-                      this, SLOT( OnAboutToQuit() ) );
-
-    iServerFrameSizeSamples = _iServerFrameSizeSamples;
-
-    thisThread = new QThread();
-    moveToThread ( thisThread );
-    thisThread->start();
-
-    return true;
+    return errmsg;
 }
 
 /**
@@ -365,8 +360,13 @@ void CJamRecorder::Start() {
     // Ensure any previous cleaning up has been done.
     OnEnd();
 
-    currentSession = new CJamSession( recordBaseDir );
-    isRecording = true;
+    // needs to be after OnEnd() as that also locks
+    ChIdMutex.lock();
+    {
+        currentSession = new CJamSession( recordBaseDir );
+        isRecording = true;
+    }
+    ChIdMutex.unlock();
 
     emit RecordingSessionStarted ( currentSession->SessionDir().path() );
 }
@@ -377,17 +377,21 @@ void CJamRecorder::Start() {
  */
 void CJamRecorder::OnEnd()
 {
-    if ( isRecording )
+    ChIdMutex.lock(); // iChId used in currentSession->End()
     {
-        isRecording = false;
-        currentSession->End();
+        if ( isRecording )
+        {
+            isRecording = false;
+            currentSession->End();
 
-        ReaperProjectFromCurrentSession();
-        AudacityLofFromCurrentSession();
+            ReaperProjectFromCurrentSession();
+            AudacityLofFromCurrentSession();
 
-        delete currentSession;
-        currentSession = nullptr;
+            delete currentSession;
+            currentSession = nullptr;
+        }
     }
+    ChIdMutex.unlock();
 }
 
 
@@ -410,7 +414,7 @@ void CJamRecorder::OnAboutToQuit()
 {
     OnEnd();
 
-    thisThread->exit();
+    QThread::currentThread()->exit();
 }
 
 void CJamRecorder::ReaperProjectFromCurrentSession()
@@ -510,20 +514,25 @@ void CJamRecorder::SessionDirToReaper(QString& strSessionDirName, int serverFram
  */
 void CJamRecorder::OnDisconnected(int iChID)
 {
-    if ( !isRecording )
+    ChIdMutex.lock();
     {
-        qWarning() << "CJamRecorder::OnDisconnected: channel" << iChID << "disconnected but not recording";
+        if ( !isRecording )
+        {
+            qWarning() << "CJamRecorder::OnDisconnected: channel" << iChID << "disconnected but not recording";
+        }
+        if ( currentSession == nullptr )
+        {
+            qWarning() << "CJamRecorder::OnDisconnected: channel" << iChID << "disconnected but no currentSession";
+            return;
+        }
+
+        currentSession->DisconnectClient ( iChID );
     }
-    if ( currentSession == nullptr )
-    {
-        qWarning() << "CJamRecorder::OnDisconnected: channel" << iChID << "disconnected but no currentSession";
-        return;
-    }
-    currentSession->DisconnectClient(iChID);
+    ChIdMutex.unlock();
 }
 
 /**
- * @brief CJamRecorder::OnFrame Handle a frame emited for a client by the server
+ * @brief CJamRecorder::OnFrame Handle a frame emitted for a client by the server
  * @param iChID the client channel id
  * @param name the client name
  * @param address the client IP and port number
@@ -540,5 +549,10 @@ void CJamRecorder::OnFrame(const int iChID, const QString name, const CHostAddre
         Start();
     }
 
-    currentSession->Frame( iChID, name, address, numAudioChannels, data, iServerFrameSizeSamples );
+    // needs to be after Start() as that also locks
+    ChIdMutex.lock();
+    {
+        currentSession->Frame ( iChID, name, address, numAudioChannels, data, iServerFrameSizeSamples );
+    }
+    ChIdMutex.unlock();
 }

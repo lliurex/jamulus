@@ -29,6 +29,8 @@
 #include <QDateTime>
 #include <QHostAddress>
 #include <QFileInfo>
+#include <QtConcurrent>
+#include <QFutureSynchronizer>
 #include <algorithm>
 #ifdef USE_OPUS_SHARED_LIB
 # include "opus/opus_custom.h"
@@ -43,9 +45,7 @@
 #include "util.h"
 #include "serverlogging.h"
 #include "serverlist.h"
-#include "multicolorledbar.h"
-#include "recorder/jamrecorder.h"
-
+#include "recorder/jamcontroller.h"
 
 /* Definitions ****************************************************************/
 // no valid channel number
@@ -161,6 +161,7 @@ protected:
 template<>
 class CServerSlots<0> {};
 
+
 class CServer :
         public QObject,
         public CServerSlots<MAX_NUM_CHANNELS>
@@ -169,20 +170,22 @@ class CServer :
 
 public:
     CServer ( const int          iNewMaxNumChan,
-              const int          iMaxDaysHistory,
               const QString&     strLoggingFileName,
               const quint16      iPortNumber,
               const QString&     strHTMLStatusFileName,
-              const QString&     strHistoryFileName,
-              const QString&     strServerNameForHTMLStatusFile,
               const QString&     strCentralServer,
               const QString&     strServerInfo,
+              const QString&     strServerListFilter,
+              const QString&     strServerPublicIP,
               const QString&     strNewWelcomeMessage,
               const QString&     strRecordingDirName,
-              const bool         bNCentServPingServerInList,
               const bool         bNDisconnectAllClientsOnQuit,
               const bool         bNUseDoubleSystemFrameSize,
+              const bool         bNUseMultithreading,
+              const bool         bDisableRecording,
               const ELicenceType eNLicenceType );
+
+    virtual ~CServer();
 
     void Start();
     void Stop();
@@ -198,10 +201,26 @@ public:
                           CVector<int>&          veciJitBufNumFrames,
                           CVector<int>&          veciNetwFrameSizeFact );
 
-    bool GetRecorderInitialised() { return bRecorderInitialised; }
-    bool GetRecordingEnabled() { return bEnableRecording; }
-    void RequestNewRecording();
+    void CreateCLServerListReqVerAndOSMes ( const CHostAddress& InetAddr )
+        { ConnLessProtocol.CreateCLReqVersionAndOSMes ( InetAddr ); }
+
+
+    // Jam recorder ------------------------------------------------------------
+    bool GetRecorderInitialised() { return JamController.GetRecorderInitialised(); }
+    QString GetRecorderErrMsg() { return JamController.GetRecorderErrMsg(); }
+    bool GetRecordingEnabled() { return JamController.GetRecordingEnabled(); }
+    bool GetDisableRecording() { return bDisableRecording; }
+    void RequestNewRecording() { JamController.RequestNewRecording(); }
+
     void SetEnableRecording ( bool bNewEnableRecording );
+
+    QString GetRecordingDir() { return JamController.GetRecordingDir(); }
+
+    void SetRecordingDir( QString newRecordingDir )
+        { JamController.SetRecordingDir ( newRecordingDir, iServerFrameSizeSamples, bDisableRecording ); }
+
+    void CreateAndSendRecorderStateForAllConChannels();
+
 
     // Server list management --------------------------------------------------
     void UpdateServerList() { ServerListManager.Update(); }
@@ -241,6 +260,9 @@ public:
     QLocale::Country GetServerCountry()
         { return ServerListManager.GetServerCountry(); }
 
+    void SetWelcomeMessage ( const QString& strNWelcMess );
+    QString GetWelcomeMessage() { return strWelcomeMessage; }
+
     ESvrRegStatus GetSvrRegStatus() { return ServerListManager.GetSvrRegStatus(); }
 
 
@@ -248,19 +270,9 @@ public:
     void SetAutoRunMinimized ( const bool NAuRuMin ) { bAutoRunMinimized = NAuRuMin; }
     bool GetAutoRunMinimized() { return bAutoRunMinimized; }
 
-    void SetLicenceType ( const ELicenceType NLiType ) { eLicenceType = NLiType; }
-    ELicenceType GetLicenceType() { return eLicenceType; }
-
-    // window position/state settings
-    QByteArray vecWindowPosMain;
-
 protected:
     // access functions for actual channels
-    bool IsConnected ( const int iChanNum )
-        { return vecChannels[iChanNum].IsConnected(); }
-
-    void StartStatusHTMLFileWriting ( const QString& strNewFileName,
-                                      const QString& strNewServerNameWithPort );
+    bool IsConnected ( const int iChanNum ) { return vecChannels[iChanNum].IsConnected(); }
 
     int GetFreeChan();
     int FindChannel ( const CHostAddress& CheckAddr );
@@ -288,19 +300,29 @@ protected:
 
     void WriteHTMLChannelList();
 
-    void ProcessData ( const CVector<CVector<int16_t> >& vecvecsData,
-                       const CVector<double>&            vecdGains,
-                       const CVector<double>&            vecdPannings,
-                       const CVector<int>&               vecNumAudioChannels,
-                       CVector<int16_t>&                 vecsOutData,
-                       const int                         iCurNumAudChan,
-                       const int                         iNumClients );
+    void DecodeReceiveDataBlocks ( const int iStartChanCnt,
+                                   const int iStopChanCnt,
+                                   const int iNumClients );
+
+    void MixEncodeTransmitDataBlocks ( const int iStartChanCnt,
+                                       const int iStopChanCnt,
+                                       const int iNumClients );
+
+    void DecodeReceiveData ( const int iChanCnt,
+                             const int iNumClients );
+
+    void MixEncodeTransmitData ( const int iChanCnt,
+                                 const int iNumClients );
 
     virtual void customEvent ( QEvent* pEvent );
 
     // if server mode is normal or double system frame size
     bool                       bUseDoubleSystemFrameSize;
     int                        iServerFrameSizeSamples;
+
+    // variables needed for multithreading support
+    bool                      bUseMultithreading;
+    QFutureSynchronizer<void> FutureSynchronizer;
 
     bool CreateLevelsForAllConChannels  ( const int                        iNumClients,
                                           const CVector<int>&              vecNumAudioChannels,
@@ -313,6 +335,8 @@ protected:
     int                        iMaxNumChannels;
     CProtocol                  ConnLessProtocol;
     QMutex                     Mutex;
+    QMutex                     MutexWelcomeMessage;
+    bool                       bChannelIsNowDisconnected;
 
     // audio encoder/decoder
     OpusCustomMode*            Opus64Mode[MAX_NUM_CHANNELS];
@@ -331,15 +355,16 @@ protected:
     CVector<QString>           vstrChatColors;
     CVector<int>               vecChanIDsCurConChan;
 
-    CVector<CVector<double> >  vecvecdGains;
-    CVector<CVector<double> >  vecvecdPannings;
+    CVector<CVector<float> >   vecvecfGains;
+    CVector<CVector<float> >   vecvecfPannings;
     CVector<CVector<int16_t> > vecvecsData;
     CVector<int>               vecNumAudioChannels;
     CVector<int>               vecNumFrameSizeConvBlocks;
     CVector<int>               vecUseDoubleSysFraSizeConvBuf;
     CVector<EAudComprType>     vecAudioComprType;
-    CVector<int16_t>           vecsSendData;
-    CVector<uint8_t>           vecbyCodedData;
+    CVector<CVector<int16_t> > vecvecsSendData;
+    CVector<CVector<float> >   vecvecfIntermediateProcBuf;
+    CVector<CVector<uint8_t> > vecvecbyCodedData;
 
     // Channel levels
     CVector<uint16_t>          vecChannelLevels;
@@ -353,20 +378,18 @@ protected:
     // channel level update frame interval counter
     int                        iFrameCount;
 
-    // recording thread
-    recorder::CJamRecorder     JamRecorder;
-    bool                       bRecorderInitialised;
-    bool                       bEnableRecording;
-
     // HTML file server status
     bool                       bWriteStatusHTMLFile;
     QString                    strServerHTMLFileListName;
-    QString                    strServerNameWithPort;
 
     CHighPrecisionTimer        HighPrecisionTimer;
 
     // server list
     CServerListManager         ServerListManager;
+
+    // jam recorder
+    recorder::CJamController   JamController;
+    bool bDisableRecording;
 
     // GUI settings
     bool                       bAutoRunMinimized;
@@ -388,9 +411,16 @@ signals:
                       const CHostAddress     RecHostAddr,
                       const int              iNumAudChan,
                       const CVector<int16_t> vecsData );
+
+    void CLVersionAndOSReceived ( CHostAddress           InetAddr,
+                                  COSUtil::EOpSystemType eOSType,
+                                  QString                strVersion );
+
+    // pass through from jam controller
     void RestartRecorder();
     void StopRecorder();
     void RecordingSessionStarted ( QString sessionDir );
+    void EndRecorderThread();
 
 public slots:
     void OnTimer();
@@ -451,6 +481,15 @@ public slots:
         ServerListManager.CentralServerRegisterServer ( InetAddr, LInetAddr, ServerInfo );
     }
 
+    void OnCLRegisterServerExReceived ( CHostAddress           InetAddr,
+                                        CHostAddress           LInetAddr,
+                                        CServerCoreInfo        ServerInfo,
+                                        COSUtil::EOpSystemType ,
+                                        QString                strVersion )
+    {
+        ServerListManager.CentralServerRegisterServer ( InetAddr, LInetAddr, ServerInfo, strVersion );
+    }
+
     void OnCLRegisterServerResp ( CHostAddress  /* unused */,
                                   ESvrRegResult eResult )
     {
@@ -468,3 +507,5 @@ public slots:
 
     void OnHandledSignal ( int sigNum );
 };
+
+Q_DECLARE_METATYPE(CVector<int16_t>)

@@ -72,11 +72,6 @@ LED bar:      lbr
 //#define _DEBUG_
 #undef _DEBUG_
 
-// define this macro if the version and operating system debugging shall
-// be enabled in the client (the ping time column in the connect dialog then
-// shows the requested information instead of the ping time)
-#undef ENABLE_CLIENT_VERSION_AND_OS_DEBUGGING
-
 // version and application name (use version from qt prject file)
 #undef VERSION
 #define VERSION                          APP_VERSION
@@ -92,9 +87,6 @@ LED bar:      lbr
 // file name for logging file
 #define DEFAULT_LOG_FILE_NAME            "Jamulussrvlog.txt"
 
-// default oldest item to draw in history graph (days ago)
-#define DEFAULT_DAYS_HISTORY             60
-
 // System block size, this is the block size on which the audio coder works.
 // All other block sizes must be a multiple of this size.
 // Note that the UpdateAutoSetting() function assumes a value of 128.
@@ -102,23 +94,31 @@ LED bar:      lbr
 #define DOUBLE_SYSTEM_FRAME_SIZE_SAMPLES ( 2 * SYSTEM_FRAME_SIZE_SAMPLES )
 
 // default server address and port numbers
-#define DEFAULT_SERVER_ADDRESS           "jamulus.fischvolk.de"
+#define DEFAULT_SERVER_ADDRESS           "anygenre1.jamulus.io"
 #define DEFAULT_PORT_NUMBER              22124
-#define CENTSERV_ALL_GENRES              "jamulusallgenres.fischvolk.de:22224"
-#define CENTSERV_GENRE_ROCK              "jamulusrock.fischvolk.de:22424"
-#define CENTSERV_GENRE_JAZZ              "jamulusjazz.fischvolk.de:22324"
-#define CENTSERV_GENRE_CLASSICAL_FOLK    "jamulusclassical.fischvolk.de:22524"
+#define CENTSERV_ANY_GENRE2              "anygenre2.jamulus.io:22224"
+#define CENTSERV_ANY_GENRE3              "anygenre3.jamulus.io:22624"
+#define CENTSERV_GENRE_ROCK              "rock.jamulus.io:22424"
+#define CENTSERV_GENRE_JAZZ              "jazz.jamulus.io:22324"
+#define CENTSERV_GENRE_CLASSICAL_FOLK    "classical.jamulus.io:22524"
+#define CENTSERV_GENRE_CHORAL            "choral.jamulus.io:22724"
+
+// servers to check for new versions
+#define UPDATECHECK1_ADDRESS             "updatecheck1.jamulus.io"
+#define UPDATECHECK2_ADDRESS             "updatecheck2.jamulus.io"
 
 // getting started and software manual URL
-#define CLIENT_GETTING_STARTED_URL       "https://github.com/corrados/jamulus/wiki/Getting-Started"
-#define SERVER_GETTING_STARTED_URL       "https://github.com/corrados/jamulus/wiki/Running-a-Server"
-#define SOFTWARE_MANUAL_URL              "https://github.com/corrados/jamulus/blob/master/src/res/homepage/manual.md"
+#define CLIENT_GETTING_STARTED_URL       "https://jamulus.io/wiki/Getting-Started"
+#define SERVER_GETTING_STARTED_URL       "https://jamulus.io/wiki/Running-a-Server"
+#define SOFTWARE_MANUAL_URL              "https://jamulus.io/wiki/Software-Manual"
 
 // determining server internal address uses well-known host and port
-// (Google DNS, or something else reliable)
-#define WELL_KNOWN_HOST                  "8.8.8.8" // Google
-#define WELL_KNOWN_PORT                  53        // DNS
-#define IP_LOOKUP_TIMEOUT                500       // ms
+// We just need a valid, public Internet IP here. We will not send any
+// traffic there as we will only set up an UDP socket without sending any
+// data.
+#define WELL_KNOWN_HOST                  "1.1.1.1"           // CloudFlare
+#define WELL_KNOWN_PORT                  DEFAULT_PORT_NUMBER
+#define IP_LOOKUP_TIMEOUT                500                 // ms
 
 // system sample rate (the sound card and audio coder works on this sample rate)
 #define SYSTEM_SAMPLE_RATE_HZ            48000 // Hz
@@ -152,6 +152,9 @@ LED bar:      lbr
 #define AUD_MIX_FADER_MAX                100
 #define AUD_MIX_PAN_MAX                  100
 
+// maximum number of fader groups (must be consistent to audiomixerboard implementation)
+#define MAX_NUM_FADER_GROUPS             4
+
 // maximum number of recognized sound cards installed in the system
 #define MAX_NUMBER_SOUND_CARDS           129 // e.g. 16 inputs, 8 outputs + default entry (MacOS)
 
@@ -171,8 +174,13 @@ LED bar:      lbr
 #define LOW_BOUND_SIG_METER              ( -50.0 ) // dB
 #define UPPER_BOUND_SIG_METER            ( 0.0 )   // dB
 
+// defines for LED level meter CLevelMeter
+#define NUM_STEPS_LED_BAR                8
+#define RED_BOUND_LED_BAR                7
+#define YELLOW_BOUND_LED_BAR             5
+
 // maximum number of connected clients at the server (must not be larger than 256)
-#define MAX_NUM_CHANNELS                 50 // max number channels for server
+#define MAX_NUM_CHANNELS                 150 // max number channels for server
 
 // actual number of used channels in the server
 // this parameter can safely be changed from 1 to MAX_NUM_CHANNELS
@@ -220,21 +228,27 @@ LED bar:      lbr
 // Maximum length of fader tag and text message strings (Since for chat messages
 // some HTML code is added, we also have to define a second length which includes
 // this additionl HTML code. Right now the length of the HTML code is approx. 66
-// character. Here, we add some headroom to this number)
+// characters. Here, we add some headroom to this number)
 #define MAX_LEN_FADER_TAG                16
 #define MAX_LEN_CHAT_TEXT                1600
 #define MAX_LEN_CHAT_TEXT_PLUS_HTML      1800
 #define MAX_LEN_SERVER_NAME              20
 #define MAX_LEN_IP_ADDRESS               15
 #define MAX_LEN_SERVER_CITY              20
-#define MAX_LEN_VERSION_TEXT             20
+#define MAX_LEN_VERSION_TEXT             30
 
 // common tool tip bottom line text
 #define TOOLTIP_COM_END_TEXT             \
     "<br><div align=right><font size=-1><i>" + \
-    QCoreApplication::translate ( "global","For more information use the ""What's " \
-    "This"" help (help menu, right mouse button or Shift+F1)" ) + \
+    QCoreApplication::translate ( "global", "For more information use the \"What's " \
+    "This\" help (help menu, right mouse button or Shift+F1)" ) + \
     "</i></font></div>"
+
+// server welcome message title (do not change for compatibility!)
+#define WELCOME_MESSAGE_PREFIX           "<b>Server Welcome Message:</b> "
+
+// mixer settings file name suffix
+#define MIX_SETTINGS_FILE_SUFFIX         "jch"
 
 #define _MAXSHORT                        32767
 #define _MINSHORT                        ( -32768 )
@@ -277,7 +291,7 @@ public:
     CGenErr ( QString strNewErrorMsg, QString strNewErrorType = "" ) :
         strErrorMsg ( strNewErrorMsg ), strErrorType ( strNewErrorType ) {}
 
-    QString GetErrorText()
+    QString GetErrorText() const
     {
         // return formatted error text
         if ( strErrorType.isEmpty() )
@@ -317,16 +331,14 @@ bool    GetFlagArgument ( char**  argv,
                           QString strShortOpt,
                           QString strLongOpt );
 
-bool    GetStringArgument ( QTextStream& tsConsole,
-                            int          argc,
+bool    GetStringArgument ( int          argc,
                             char**       argv,
                             int&         i,
                             QString      strShortOpt,
                             QString      strLongOpt,
                             QString&     strArg );
 
-bool    GetNumericArgument ( QTextStream& tsConsole,
-                             int          argc,
+bool    GetNumericArgument ( int          argc,
                              char**       argv,
                              int&         i,
                              QString      strShortOpt,

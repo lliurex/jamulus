@@ -28,6 +28,7 @@
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreMIDI/CoreMIDI.h>
 #include <QMutex>
+#include <QMessageBox>
 #include "soundbase.h"
 #include "global.h"
 
@@ -35,10 +36,12 @@
 /* Classes ********************************************************************/
 class CSound : public CSoundBase
 {
+    Q_OBJECT
+
 public:
     CSound ( void           (*fpNewProcessCallback) ( CVector<short>& psData, void* arg ),
              void*          arg,
-             const int      iCtrlMIDIChannel,
+             const QString& strMIDISetup,
              const bool     ,
              const QString& );
 
@@ -61,13 +64,14 @@ public:
     virtual int     GetLeftOutputChannel()  { return iSelOutputLeftChannel; }
     virtual int     GetRightOutputChannel() { return iSelOutputRightChannel; }
 
-    // these variables should be protected but cannot since we want
+    // these variables/functions should be protected but cannot since we want
     // to access them from the callback function
     CVector<short> vecsTmpAudioSndCrdStereo;
     int            iCoreAudioBufferSizeMono;
     int            iCoreAudioBufferSizeStereo;
     AudioDeviceID  CurrentAudioInputDeviceID;
     AudioDeviceID  CurrentAudioOutputDeviceID;
+    long           lCurDev;
     int            iNumInChan;
     int            iNumInChanPlusAddChan; // includes additional "added" channels
     int            iNumOutChan;
@@ -91,10 +95,11 @@ public:
     CVector<int>   vecNumOutBufChan;
 
 protected:
-    virtual QString LoadAndInitializeDriver ( int iIdx, bool );
+    virtual QString LoadAndInitializeDriver ( QString strDriverName, bool );
 
     QString CheckDeviceCapabilities ( const int iDriverIdx );
     void    UpdateChSelection();
+    void    GetAvailableInOutDevices();
 
     int CountChannels ( AudioDeviceID devID,
                         bool          isInput );

@@ -22,34 +22,38 @@
  *
 \******************************************************************************/
 
+#pragma once
+
 #include <QLabel>
 #include <QString>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QMenuBar>
 #include <QWhatsThis>
 #include <QLayout>
 #include <QAccessible>
+#include <QDesktopServices>
+#include <QMessageBox>
 #include "global.h"
+#include "util.h"
 #include "ui_chatdlgbase.h"
 
 
 /* Classes ********************************************************************/
-class CChatDlg : public QDialog, private Ui_CChatDlgBase
+class CChatDlg : public CBaseDlg, private Ui_CChatDlgBase
 {
     Q_OBJECT
 
 public:
-    CChatDlg ( QWidget* parent = nullptr, Qt::WindowFlags f = nullptr );
+    CChatDlg ( QWidget* parent = nullptr );
 
     void AddChatText ( QString strChatText );
 
 public slots:
-    void OnLocalInputTextReturnPressed();
+    void OnSendText();
     void OnLocalInputTextTextChanged ( const QString& strNewText );
-    void OnClearPressed();
-
-    void keyPressEvent ( QKeyEvent *e ) // block escape key
-        { if ( e->key() != Qt::Key_Escape ) QDialog::keyPressEvent ( e ); }
+    void OnClearChatHistory();
+    void OnAnchorClicked ( const QUrl& Url );
 
 signals:
     void NewLocalInputText ( QString strNewText );

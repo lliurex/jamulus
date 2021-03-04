@@ -40,6 +40,8 @@
 /* Classes ********************************************************************/
 class CMultiColorLED : public QLabel
 {
+    Q_OBJECT
+
 public:
     enum ELightColor
     {
@@ -50,10 +52,17 @@ public:
         RL_RED
     };
 
-    CMultiColorLED ( QWidget* parent = nullptr, Qt::WindowFlags f = nullptr );
+    enum EType
+    {
+        MT_LED,
+        MT_INDICATOR
+    };
+
+    CMultiColorLED ( QWidget* parent = nullptr );
 
     void Reset();
     void SetLight ( const ELightColor eNewStatus );
+    void SetType ( const EType eNType );
 
 protected:
     ELightColor eColorFlag;
@@ -66,8 +75,12 @@ protected:
     QPixmap BitmCubeGreen;
     QPixmap BitmCubeYellow;
     QPixmap BitmCubeRed;
+    QPixmap BitmIndicatorGreen;
+    QPixmap BitmIndicatorYellow;
+    QPixmap BitmIndicatorRed;
 
     int     iUpdateTime;
+    EType   eType;
 
     bool    bFlagRedLi;
     bool    bFlagGreenLi;

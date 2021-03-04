@@ -1,62 +1,47 @@
-![Homepage picture](src/res/homepage/jamulusbannersmall.png)
+[![Homepage picture](src/res/homepage/jamulusbannersmall.png)](https://jamulus.io)
 
-[![Build Status](https://travis-ci.org/corrados/jamulus.svg?branch=master)](https://travis-ci.org/corrados/jamulus)
+[![Auto-Build](https://github.com/jamulussoftware/jamulus/actions/workflows/autobuild.yml/badge.svg)](https://github.com/jamulussoftware/jamulus/actions/workflows/autobuild.yml)
 
 Jamulus - Internet Jam Session Software
 =======================================
-<img align="left" src="src/res/homepage/mediawikisidebarlogo.png"/>
+<a href="https://jamulus.io/"><img align="left" src="src/res/homepage/mediawikisidebarlogo.png"/></a>
 
-The Jamulus software enables musicians to perform real-time jam sessions over the internet.
-There is one server running the Jamulus server software which collects the audio data from
-each Jamulus client, mixes the audio data and sends the mix back to each client.
+Jamulus enables musicians to perform in real-time together over the internet.
+A Jamulus server collects the incoming audio data from each Jamulus client, mixes that data and then sends that mix back to each client. Jamulus can support large numbers of clients with minimal latency and modest bandwidth requirements. 
 
-Jamulus is __Open Source software__ ([GPL, GNU General Public License](http://www.gnu.org/licenses/gpl-2.0.html))
-and runs under __Windows__ ([ASIO](http://www.steinberg.net)),
+Jamulus is [__free and open source software__](https://www.gnu.org/philosophy/free-sw.en.html) (FOSS) licensed under the [GPL](http://www.gnu.org/licenses/gpl-2.0.html) 
+and runs under __Windows__ ([ASIO](https://www.steinberg.net)),
 __MacOS__ ([Core Audio](https://developer.apple.com/documentation/coreaudio)) and
-__Linux__ ([Jack](http://jackaudio.org)).
+__Linux__ ([Jack](https://jackaudio.org)).
 It is based on the [Qt framework](https://www.qt.io) and uses the [OPUS](http://www.opus-codec.org) audio codec.
 
-The project is hosted at [Sourceforge.net](http://sourceforge.net/projects/llcon).
-![Sourceforge logo](http://sflogo.sourceforge.net/sflogo.php?group_id=158367&amp;type=5)
 
+Installation
+------------
 
-Required Hardware Setup
------------------------
-
-The required minimum internet connection speed is 200 kbps (0.2Mbps) for the up and down-stream.
-The ping time (i.e. round trip delay) from your computer to the server should not exceed 40 ms average.
-
-For the Jamulus software to run stable it is recommended to use a PC with at least 1.5 GHz CPU frequency.
-
-On a Windows operating system it is recommended to use a sound card with a native ASIO driver.
-This ensures to get the lowest possible latencies.
-
-
-Download and Installation
--------------------------
-
-Download the latest version for [Windows, Macintosh or Linux here](https://sourceforge.net/projects/llcon/files/). 
-
-**Windows users**: The Jamulus client software requires an ASIO sound card driver to be available in the system.
-If your sound card does not have native ASIO support, you can try out [this alternative](http://www.asio4all.org/)
+[Please see the Getting Started page](https://jamulus.io/wiki/Getting-Started) containing instructions for installing and using Jamulus for your platform.
 
 
 Help
 ----
 
-Official documentation for Jamulus is on the [Github wiki](https://github.com/corrados/jamulus/wiki)
+Official documentation for Jamulus is on the [Jamulus homepage](https://jamulus.io)
 
-See also the [discussion forums](https://sourceforge.net/p/llcon/discussion)
+See also the [discussion forums](https://github.com/jamulussoftware/jamulus/discussions). If you have issues, feel free to ask for help there.
 
-Bugs and feature requests can be [reported here](https://github.com/corrados/jamulus/issues)
+Bugs and feature requests can be [reported here](https://github.com/jamulussoftware/jamulus/issues)
 
 
-Compilation and Development
----------------------------
+Compilation
+-----------
 
-See the [compile Instructions](INSTALL.md) 
+[Please see these instructions](https://jamulus.io/wiki/Compiling)
 
-For setting up and running a server, see [this guide](https://github.com/corrados/jamulus/wiki/Running-a-Server)
+
+Contributing
+------------
+
+See the [contributing instructions](CONTRIBUTING.md)
 
 
 Acknowledgments
@@ -79,4 +64,4 @@ source:
 - Country flag icons from Mark James: http://www.famfamfam.com
 
 We would also like to acknowledge the contributors listed in the
-[Github Contributors list](https://github.com/corrados/jamulus/graphs/contributors).
+[Github Contributors list](https://github.com/jamulussoftware/jamulus/graphs/contributors).

@@ -22,6 +22,8 @@
  *
 \******************************************************************************/
 
+#pragma once
+
 #include <QCloseEvent>
 #include <QLabel>
 #include <QListView>
@@ -33,7 +35,12 @@
 #include <QLayout>
 #include <QSystemTrayIcon>
 #include <QSettings>
+#include <QFileDialog>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+# include <QVersionNumber>
+#endif
 #include "global.h"
+#include "util.h"
 #include "server.h"
 #include "settings.h"
 #include "ui_serverdlgbase.h"
@@ -43,18 +50,23 @@
 // update time for GUI controls
 #define GUI_CONTRL_UPDATE_TIME      1000 // ms
 
+// Strings used in multiple places
+#define SREC_NOT_INITIALISED CServerDlg::tr ( "Not initialised" )
+#define SREC_NOT_ENABLED     CServerDlg::tr ( "Not enabled" )
+#define SREC_NOT_RECORDING   CServerDlg::tr ( "Not recording" )
+#define SREC_RECORDING       CServerDlg::tr ( "Recording" )
+
 
 /* Classes ********************************************************************/
-class CServerDlg : public QDialog, private Ui_CServerDlgBase
+class CServerDlg : public CBaseDlg, private Ui_CServerDlgBase
 {
     Q_OBJECT
 
 public:
-    CServerDlg ( CServer*        pNServP,
-                 CSettings*      pNSetP,
-                 const bool      bStartMinimized,
-                 QWidget*        parent = nullptr,
-                 Qt::WindowFlags f = nullptr );
+    CServerDlg ( CServer*         pNServP,
+                 CServerSettings* pNSetP,
+                 const bool       bStartMinimized,
+                 QWidget*         parent = nullptr );
 
 protected:
     virtual void changeEvent ( QEvent* pEvent );
@@ -68,7 +80,7 @@ protected:
 
     QTimer                    Timer;
     CServer*                  pServer;
-    CSettings*                pSettings;
+    CServerSettings*          pSettings;
 
     CVector<QTreeWidgetItem*> vecpListViewItems;
     QMutex                    ListViewMutex;
@@ -82,11 +94,8 @@ protected:
     QMenu*                    pSystemTrayIconMenu;
 
 public slots:
-    void OnAboutToQuit() { pSettings->Save(); }
-
     void OnRegisterServerStateChanged ( int value );
     void OnStartOnOSStartStateChanged ( int value );
-    void OnUseCCLicenceStateChanged ( int value );
     void OnEnableRecorderStateChanged ( int value )
         { pServer->SetEnableRecording ( Qt::CheckState::Checked == value ); }
 
@@ -104,11 +113,15 @@ public slots:
     void OnSysTrayMenuHide() { hide(); }
     void OnSysTrayMenuExit() { close(); }
     void OnSysTrayActivated ( QSystemTrayIcon::ActivationReason ActReason );
-
-    void keyPressEvent ( QKeyEvent *e ) // block escape key
-        { if ( e->key() != Qt::Key_Escape ) QDialog::keyPressEvent ( e ); }
-
+    void OnWelcomeMessageChanged() { pServer->SetWelcomeMessage ( tedWelcomeMessage->toPlainText() ); }
+    void OnLanguageChanged ( QString strLanguage ) { pSettings->strLanguage = strLanguage; }
     void OnNewRecordingClicked() { pServer->RequestNewRecording(); }
+    void OnRecordingDirClicked();
+    void OnClearRecordingDirClicked();
     void OnRecordingSessionStarted ( QString sessionDir )
         { UpdateRecorderStatus ( sessionDir ); }
+
+    void OnCLVersionAndOSReceived ( CHostAddress           ,
+                                    COSUtil::EOpSystemType ,
+                                    QString                strVersion );
 };
