@@ -1,5 +1,5 @@
 /******************************************************************************\
- * Copyright (c) 2004-2020
+ * Copyright (c) 2004-2022
  *
  * Author(s):
  *  Volker Fischer
@@ -8,16 +8,16 @@
  *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free Software
- * Foundation; either version 2 of the License, or (at your option) any later 
+ * Foundation; either version 2 of the License, or (at your option) any later
  * version.
  *
- * This program is distributed in the hope that it will be useful, but WITHOUT 
+ * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
  * details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 
+ * this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
  *
 \******************************************************************************/
@@ -44,11 +44,9 @@
 #include "multicolorled.h"
 #include "ui_clientsettingsdlgbase.h"
 
-
 /* Definitions ****************************************************************/
 // update time for GUI controls
-#define DISPLAY_UPDATE_TIME         1000 // ms
-
+#define DISPLAY_UPDATE_TIME 1000 // ms
 
 /* Classes ********************************************************************/
 class CClientSettingsDlg : public CBaseDlg, private Ui_CClientSettingsDlgBase
@@ -56,31 +54,20 @@ class CClientSettingsDlg : public CBaseDlg, private Ui_CClientSettingsDlgBase
     Q_OBJECT
 
 public:
-    CClientSettingsDlg ( CClient*         pNCliP,
-                         CClientSettings* pNSetP,
-                         QWidget*         parent = nullptr );
+    CClientSettingsDlg ( CClient* pNCliP, CClientSettings* pNSetP, QWidget* parent = nullptr );
 
-    void SetStatus ( const CMultiColorLED::ELightColor eStatus ) { ledNetw->SetLight ( eStatus ); }
-
-    void ResetStatusAndPingLED()
-    {
-        ledNetw->Reset();
-        ledOverallDelay->Reset();
-    }
-
-    void SetPingTimeResult ( const int                         iPingTime,
-                             const int                         iOverallDelayMs,
-                             const CMultiColorLED::ELightColor eOverallDelayLEDColor );
-
+    void UpdateUploadRate();
     void UpdateDisplay();
     void UpdateSoundDeviceChannelSelectionFrame();
+
+    void SetEnableFeedbackDetection ( bool enable );
 
 protected:
     void    UpdateJitterBufferFrame();
     void    UpdateSoundCardFrame();
-    void    UpdateCustomCentralServerComboBox();
-    QString GenSndCrdBufferDelayString ( const int     iFrameSize,
-                                         const QString strAddText = "" );
+    void    UpdateDirectoryServerComboBox();
+    void    UpdateAudioFaderSlider();
+    QString GenSndCrdBufferDelayString ( const int iFrameSize, const QString strAddText = "" );
 
     virtual void showEvent ( QShowEvent* );
 
@@ -95,8 +82,10 @@ public slots:
     void OnNetBufServerValueChanged ( int value );
     void OnAutoJitBufStateChanged ( int value );
     void OnEnableOPUS64StateChanged ( int value );
-    void OnCentralServerAddressEditingFinished();
+    void OnFeedbackDetectionChanged ( int value );
+    void OnCustomDirectoriesEditingFinished();
     void OnNewClientLevelEditingFinished() { pSettings->iNewClientFaderLevel = edtNewClientLevel->text().toInt(); }
+    void OnInputBoostChanged();
     void OnSndCrdBufferDelayButtonGroupClicked ( QAbstractButton* button );
     void OnSoundcardActivated ( int iSndDevIdx );
     void OnLInChanActivated ( int iChanIdx );
@@ -106,11 +95,26 @@ public slots:
     void OnAudioChannelsActivated ( int iChanIdx );
     void OnAudioQualityActivated ( int iQualityIdx );
     void OnGUIDesignActivated ( int iDesignIdx );
-    void OnDriverSetupClicked();
+    void OnMeterStyleActivated ( int iMeterStyleIdx );
     void OnLanguageChanged ( QString strLanguage ) { pSettings->strLanguage = strLanguage; }
+    void OnAliasTextChanged ( const QString& strNewName );
+    void OnInstrumentActivated ( int iCntryListItem );
+    void OnCountryActivated ( int iCntryListItem );
+    void OnCityTextChanged ( const QString& strNewName );
+    void OnSkillActivated ( int iCntryListItem );
+    void OnTabChanged();
+    void OnMakeTabChange ( int iTabIdx );
+    void OnAudioPanValueChanged ( int value );
+
+#if defined( _WIN32 ) && !defined( WITH_JACK )
+    // Only include this slot for Windows when JACK is NOT used
+    void OnDriverSetupClicked();
+#endif
 
 signals:
     void GUIDesignChanged();
+    void MeterStyleChanged();
     void AudioChannelsChanged();
-    void CustomCentralServerAddrChanged();
+    void CustomDirectoriesChanged();
+    void NumMixerPanelRowsChanged ( int value );
 };

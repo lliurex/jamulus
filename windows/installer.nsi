@@ -1,11 +1,13 @@
 ; Jamulus NSIS Installer with Modern User Interface
 
 ; Includes
-!include "x64.nsh"       ; 64bit architecture support
-!include "MUI2.nsh"      ; Modern UI
-!include "LogicLib.nsh"  ; Logical operators
-!include "Sections.nsh"  ; Support for section selection
-!include "nsDialogs.nsh" ; Support custom pages with dialogs
+!include "x64.nsh"                             ; 64bit architecture support
+!include "MUI2.nsh"                            ; Modern UI
+!include "LogicLib.nsh"                        ; Logical operators
+!include "Sections.nsh"                        ; Support for section selection
+!include "nsDialogs.nsh"                       ; Support custom pages with dialogs
+!include "NSISCopyRegistryKey\registry.nsh"    ; Support moving registry keys
+
 
 ; Compile-time definitions
 !define VC_REDIST32_EXE   "vc_redist.x86.exe"
@@ -19,6 +21,7 @@
 !define APP_EXE           "${APP_NAME}.exe"
 !define UNINSTALL_EXE     "Uninstall.exe"
 !define APP_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+!define APP_URL           "https://jamulus.io"
 
 !define SF_USELECTED  0
 
@@ -35,6 +38,15 @@ BrandingText "${APP_NAME}. Make music online. With friends. For free."
 
  ; Additional plugin location (for nsProcess)
 !addplugindir "${WINDOWS_PATH}"
+
+; Add support for copying registry keys
+
+!if ${BUILD_OPTION} != "jackonwindows"
+    ; This macro is only needed when using ASIO4ALL.
+    ; Technically, we cannot detect this easily.
+    ; Therefore, we only insert the macro when not building for JACK.
+    !insertmacro COPY_REGISTRY_KEY
+!endif
 
 ; Installer graphical element configuration
 !define MUI_ICON                       "${WINDOWS_PATH}\mainicon.ico"
@@ -54,7 +66,12 @@ BrandingText "${APP_NAME}. Make music online. With friends. For free."
 !define MUI_PAGE_CUSTOMFUNCTION_PRE AbortOnRunningApp
 !insertmacro MUI_PAGE_WELCOME
 
-Page Custom ASIOCheckInstalled ExitASIOInstalled
+; Display dialog based on BuildOption set
+!if ${BUILD_OPTION} == "jackonwindows"
+    Page Custom JACKCheckInstalled ExitJACKInstalled
+!else
+    Page Custom ASIOCheckInstalled ExitASIOInstalled
+!endif
 
 !insertmacro MUI_PAGE_LICENSE "${ROOT_PATH}\COPYING"
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE ValidateDestinationFolder
@@ -79,7 +96,7 @@ Page Custom ASIOCheckInstalled ExitASIOInstalled
 ; Supported languages configuration
 ; Additional languages can be added in the file installerlng.nsi in the wininstaller folder, see https://nsis.sourceforge.io/Examples/Modern%20UI/MultiLanguage.nsi
 
-!include "${ROOT_PATH}\src\res\translation\wininstaller\installerlng.nsi"
+!include "${ROOT_PATH}\src\translation\wininstaller\installerlng.nsi"
 
 ; Abort the installer/uninstaller if Jamulus is running
 
@@ -99,7 +116,11 @@ Page Custom ASIOCheckInstalled ExitASIOInstalled
 
 Var Dialog
 Var Label
-Var Button
+
+!if ${BUILD_OPTION} != "jackonwindows"
+    ;Only Define Button when not using jack dialogs
+    Var Button
+!endif
 
 ; Define user choices
 
@@ -112,8 +133,8 @@ Var bRunApp
     !define prefix "${DEPLOY_PATH}\${buildArch}"
     !tempfile files
 
-    ; Find target folders (Probably here's an issue with quoting. If ${prefix} contains spaces, the installer folders aren't created in the right way.)
-    !system 'cmd.exe /v /c "for /f "usebackq" %d in (`dir /b /s /ad "${prefix}"`) do \
+    ; Find target folders (#864 resolved by adding delims= to the for command. This prevents splitting path names when the path contains spaces)
+    !system 'cmd.exe /v /c "for /f "usebackq delims=" %d in (`dir /b /s /ad "${prefix}"`) do \
         @(set "_d=%d" && echo CreateDirectory "$INSTDIR\!_d:${prefix}\=!" >> "${files}")"'
 
     ; Find target files
@@ -163,6 +184,10 @@ Var bRunApp
     WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "DisplayName"     "${APP_NAME}"
     WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "DisplayIcon"     "$INSTDIR\${APP_EXE},0"
     WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\${UNINSTALL_EXE}"'
+    WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "DisplayVersion"  "${APP_VERSION}"
+    WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "HelpLink"        "${APP_URL}"
+    WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "URLInfoAbout"    "${APP_URL}"
+    WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "Publisher"       "${APP_NAME}"
 
     ; Add the uninstaller
     WriteUninstaller "$INSTDIR\${UNINSTALL_EXE}"
@@ -212,6 +237,34 @@ Section "Install_64Bit" INST_64
                 MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(OLD_VER_REMOVE_FAILED)" /sd IDCANCEL IDOK continueinstall
                 goto quit
             ${EndIf}
+
+            !if ${BUILD_OPTION} != "jackonwindows"
+                ; Copy old ASIO4ALL registry configuration
+
+                IntOp $0 0 + 0
+                EnumStart:
+                    EnumRegKey $R1 HKEY_USERS "" $0 ; foreach user
+                    IntOp $0 $0 + 1
+                    StrCmp $R1 ".DEFAULT" EnumStart
+                    StrCmp $R1 "" EnumEnd
+
+                    ; check if new key already exists. If this is the case, we'll not continue
+                    ClearErrors
+                    EnumRegKey $1 HKU "$R1\SOFTWARE\ASIO4ALL v2 by Wuschel\7A49ECC9" 0
+                    IfErrors 0 EnumStart ; if the above line gives an error, it cannot find the key --> We'll continue
+
+                    ; check if old key exists. If this is true, we'll continue and move the content of the old one to the new one.
+                    ClearErrors
+                    EnumRegKey $1 HKU "$R1\SOFTWARE\ASIO4ALL v2 by Wuschel\8A9E7A56" 0
+                    IfErrors EnumStart 0 ; if the above line gives an error, it cannot find the key --> skip this user
+
+                    ; copy the registry key
+                    ${COPY_REGISTRY_KEY} HKU "$R1\SOFTWARE\ASIO4ALL v2 by Wuschel\8A9E7A56" HKU "$R1\SOFTWARE\ASIO4ALL v2 by Wuschel\7A49ECC9"
+
+                    goto EnumStart
+                EnumEnd:
+            !endif
+
             goto continueinstall
 
         quit:
@@ -333,45 +386,87 @@ Function createdesktopshortcut
    CreateShortCut  "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
 FunctionEnd
 
-Function ASIOCheckInstalled
+; Define functions for JACK when using the jackonwindows buildoption, else use default ASIO functions
+!if ${BUILD_OPTION} == "jackonwindows"
+    Function JACKCheckInstalled
 
-    ; insert ASIO install page if no ASIO driver was found
-    ClearErrors
-    EnumRegKey $0 HKLM "SOFTWARE\ASIO" 0
+        ; insert JACK install page if no JACK driver was found
+        ClearErrors
+        EnumRegKey $0 HKLM "SOFTWARE\JACK" 0
 
-    IfErrors 0 ASIOExists
-        !insertmacro MUI_HEADER_TEXT "$(ASIO_DRIVER_HEADER)" "$(ASIO_DRIVER_SUB)"
-        nsDialogs::Create 1018
-        Pop $Dialog
-        ${If} $Dialog == error
-            Abort
-        ${Endif}
+        IfErrors 0 JACKExists
+            !insertmacro MUI_HEADER_TEXT "$(JACK_DRIVER_HEADER)" "$(JACK_DRIVER_SUB)"
+            nsDialogs::Create 1018
+            Pop $Dialog
+            ${If} $Dialog == error
+                Abort
+            ${Endif}
 
-        ${NSD_CreateLabel} 0 0 100% 12u "$(ASIO_DRIVER_EXPLAIN)"
-        Pop $Label
-        ${NSD_CreateButton} 0 13u 100% 13u "$(ASIO_DRIVER_MORE_INFO)"
-        Pop $Button
-        ${NSD_OnClick} $Button OpenASIOHelpPage
+            ${NSD_CreateLabel} 0 0 100% 40u "$(JACK_DRIVER_EXPLAIN)"
+            Pop $Label
 
-        nsDialogs::Show
+            nsDialogs::Show
 
-    ASIOExists:
+        JACKExists:
 
-FunctionEnd
+    FunctionEnd
 
-Function OpenASIOHelpPage
-    ExecShell "open" "$(ASIO_DRIVER_MORE_INFO_URL)"
-FunctionEnd
+    Function ExitJACKInstalled
+        ClearErrors
+        EnumRegKey $0 HKLM "SOFTWARE\JACK" 0
+        IfErrors 0 SkipMessage
+            MessageBox MB_YESNO|MB_ICONEXCLAMATION "$(JACK_EXIT_NO_DRIVER)" /sd IDNO IDYES SkipMessage
+                Abort
+       SkipMessage:
+            StrCpy $bRunApp "0" ; set the run app after install option to unchecked as there is no audio driver
 
-Function ExitASIOInstalled
-    ClearErrors
-    EnumRegKey $0 HKLM "SOFTWARE\ASIO" 0
-    IfErrors 0 SkipMessage
-        MessageBox MB_YESNO|MB_ICONEXCLAMATION "$(ASIO_EXIT_NO_DRIVER)" /sd IDNO IDYES SkipMessage
-            Abort
-   SkipMessage:
+    FunctionEnd
+!else
+    Function ASIOCheckInstalled
 
-FunctionEnd
+        ; insert ASIO install page if no ASIO driver was found
+        EnumRegKey $0 HKLM "SOFTWARE\ASIO" 0
+
+        ; check on errors cannot be used, as the error flag is not set when the string exists does not contain at least 1 subkey for a driver
+        ${If} $0 == "" ; if empty string returned, ASIO key does not exist or does not have at least 1 subkey
+            !insertmacro MUI_HEADER_TEXT "$(ASIO_DRIVER_HEADER)" "$(ASIO_DRIVER_SUB)"
+            nsDialogs::Create 1018
+            Pop $Dialog
+            ${If} $Dialog == error
+                Abort
+            ${Endif}
+
+            ${NSD_CreateLabel} 0 0 100% 20u "$(ASIO_DRIVER_EXPLAIN)"
+            Pop $Label
+            ${NSD_CreateButton} 0 21u 100% 15u "$(ASIO_DRIVER_MORE_INFO)"
+            Pop $Button
+            ${NSD_OnClick} $Button OpenASIOHelpPage
+
+            nsDialogs::Show
+
+        ${EndIf}
+
+    FunctionEnd
+
+    Function OpenASIOHelpPage
+        ExecShell "open" "$(ASIO_DRIVER_MORE_INFO_URL)"
+    FunctionEnd
+
+    Function ExitASIOInstalled
+
+        EnumRegKey $0 HKLM "SOFTWARE\ASIO" 0
+
+        ; check on errors cannot be used, as the error flag is not set when the string exists does not contain at least 1 subkey for a driver
+        ${If} $0 == "" ; if empty string returned, ASIO key does not exist or does not have at least 1 subkey
+            MessageBox MB_YESNO|MB_ICONEXCLAMATION "$(ASIO_EXIT_NO_DRIVER)" /sd IDNO IDYES SkipMessage
+                Abort
+        ${EndIf}
+
+        SkipMessage:
+            StrCpy $bRunApp "0" ; set the run app after install option to unchecked as there is no audio driver
+
+    FunctionEnd
+!endif
 
 ; Uninstaller
 !macro un.InstallFiles buildArch
@@ -383,8 +478,8 @@ FunctionEnd
     !system 'cmd.exe /v /c "for /r "${prefix}" %f in (*.*) do \
         @(set "_f=%f" && echo Delete "$INSTDIR\!_f:${prefix}\=!" >> "${files}")"'
 
-    ; Find target folders in reverse order to ensure they can be deleted when empty
-    !system 'cmd.exe /v /c "for /f "usebackq" %d in \
+    ; Find target folders in reverse order to ensure they can be deleted when empty (include delims= to prevent splitting path names when the path contains spaces)
+    !system 'cmd.exe /v /c "for /f "usebackq delims=" %d in \
         (`dir /b /s /ad "${prefix}" ^| C:\Windows\System32\sort.exe /r`) do \
         @(set "_d=%d" && echo RMDir "$INSTDIR\!_d:${prefix}\=!" >> "${files}")"'
 

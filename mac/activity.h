@@ -1,5 +1,5 @@
 /******************************************************************************\
- * Copyright (c) 2004-2020
+ * Copyright (c) 2004-2022
  *
  * Author(s):
  *  AronVietti
@@ -33,13 +33,13 @@ class CActivityId;
 class CActivity
 {
 private:
-    CActivityId *pActivity;
-    
+    CActivityId* pActivity;
+
 public:
     CActivity();
-    
+
     ~CActivity();
-    
+
     void BeginActivity();
 
     void EndActivity();
