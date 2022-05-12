@@ -9,6 +9,7 @@ X-Python3-Version: >= 3.5
 Homepage: http://llcon.sourceforge.net
 
 Package: jamulus
+Conflicts: zero-lliurex-jamulus (<< 0.2.3)
 Architecture: all
 Depends: ${python3:Depends}, jackd,libqt5core5a, libqt5dbus5, libqt5gui5, libqt5widgets5
 Description: The Jamulus software enables musicians to perform real-time jam sessions over the internet.
