@@ -2,4 +2,4 @@
 
 THIS BRANCH IS NO LONGER MAINTAINED AND WILL BE REMOVED IN FUTURE.
 
-PLEASE USE THE "main" branch instead: https://github.com/jamulussoftware/jamulus
+PLEASE SEE THIS ANNOUNCEMENT: https://github.com/orgs/jamulussoftware/discussions/2984 AND CHECKOUT THE "main" branch instead: https://github.com/jamulussoftware/jamulus
